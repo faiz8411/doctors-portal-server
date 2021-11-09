@@ -10,7 +10,8 @@ app.use(cors())
 app.use(express.json())
 // doctors-portal-9d95c-firebase-adminsdk-eme8f-61353cbfd8.json
 
-const serviceAccount = require('./doctors-portal-9d95c-firebase-adminsdk-eme8f-61353cbfd8.json');
+const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+// console.log(process.env.FIREBASE_SERVICE_ACCOUNT)
 
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount)
