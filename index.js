@@ -2,12 +2,15 @@ const express = require('express')
 const app = express()
 const cors = require('cors')
 const admin = require("firebase-admin");
-
+const fileUpload = require('express-fileupload')
 const { MongoClient, Admin } = require('mongodb');
+const ObjectId = require('mongodb').ObjectId
+const stripe = require('stripe')('sk_test_51JvlH3HnPZVD9IVWGJB0xzl0XG6v5qivT8cPYQeYTLfHmEmYOTqhDQm7biosW8cDSaCKgZKi7X5HillCEIdghzLL00nWSvMkSL')
 require('dotenv').config()
 const port = process.env.PORT || 5000
 app.use(cors())
 app.use(express.json())
+app.use(fileUpload())
 // doctors-portal-9d95c-firebase-adminsdk-eme8f-61353cbfd8.json
 
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
@@ -44,6 +47,7 @@ async function run() {
         const database = client.db('doctors_portal')
         const appointmentCollection = database.collection('appointments')
         const usersCollection = database.collection('users')
+        const doctorsCollection = database.collection('doctors')
         // console.log('database connect successfully')
         app.post('/appointments', async (req, res) => {
             const appointment = req.body
@@ -64,6 +68,27 @@ async function run() {
             res.json(appointments)
         })
 
+        app.get('/appointments/:id', async (req, res) => {
+            const id = req.params.id
+            const query = { _id: ObjectId(id) }
+            const result = await appointmentCollection.findOne(query)
+            res.json(result)
+        })
+
+
+        app.put('/appointments/:id', async (req, res) => {
+            const id = req.params.id
+            const payment = req.body
+            const filter = { _id: ObjectId(id) }
+            const updateDoc = {
+                $set: {
+                    payment: payment
+                }
+            }
+            const result = await appointmentCollection.updateOne(filter, updateDoc)
+            res.json(result)
+        })
+
         // admin cheking
         app.get('/users/:email', async (req, res) => {
             const email = req.params.email
@@ -74,6 +99,28 @@ async function run() {
                 isAdmin = true
             }
             res.json({ admin: isAdmin })
+        })
+
+        app.post('/doctors', async (req, res) => {
+            const name = req.body.name
+            const email = req.body.email
+            const pic = req.files.image
+            const picData = pic.data
+            const enCodedPic = picData.toString('base64')
+            const imageBuffer = Buffer.from(enCodedPic, 'base64')
+            const doctor = {
+                name,
+                email,
+                image: imageBuffer
+            }
+            const result = await doctorsCollection.insertOne(doctor)
+            res.json(result)
+        })
+
+        app.get('/doctors', async (req, res) => {
+            const cursor = doctorsCollection.find({})
+            const doctors = await cursor.toArray()
+            res.json(doctors)
         })
         // sae data from users
         app.post('/users', async (req, res) => {
@@ -98,7 +145,23 @@ async function run() {
             const updateDoc = { $set: { role: 'admin' } }
             const result = await usersCollection.updateOne(filter, updateDoc)
             res.json(result)
-        })
+        });
+        app.post("/create-payment-intent", async (req, res) => {
+            const paymentInfo = req.body;
+            const amount = paymentInfo.price * 100
+
+            // Create a PaymentIntent with the order amount and currency
+            const paymentIntent = await stripe.paymentIntents.create({
+                amount: amount,
+                currency: "usd",
+                payment_method_types: ['card']
+            })
+
+            res.send({
+                clientSecret: paymentIntent.client_secret,
+            });
+        });
+
 
 
     }
